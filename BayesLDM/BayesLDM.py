@@ -201,7 +201,7 @@ class Parser:
       elif type_name == "BernoulliLogitsSample":    parameters = [statement.logits]; before=['logits=']
       elif type_name == "BetaSample":               parameters = [statement.a, statement.b]
       elif type_name == "BinomialSample":           parameters = [statement.total_count, statement.probs]
-      elif type_name == "BinomialLogitsSample":     parameters = [statement.logits, statement.total_count]
+      elif type_name == "BinomialLogitsSample":     parameters = [statement.logits, statement.total_count]; before=['','int(']; after=['',')']
       elif type_name == "CategoricalSample":        parameters = [statement.probs]; before=['jnp.array(']; after=[')']
       elif type_name == "CauchySample":             parameters = [statement.mean, statement.sd]
       elif type_name == "DirichletSample":          parameters = [statement.concentration]; before=['jnp.array(']; after=[')']
@@ -787,19 +787,26 @@ class compile:
     if self.n_level == 0:
       self.chosen_implementation = 'default'
       body_text = ''; obs_array_dict = collections.defaultdict(list)
+      definition = []
       for var_name in self.topological_order:
+        pos = var_name.find('[')
+        if pos > 0:
+          short_name = var_name[:pos]
+          if short_name not in self.inputs:         
+            if short_name not in definition:
+              assigned_index = self.array_variables_dict[short_name]['assigned_index']
+              if assigned_index.find(',') > 0:
+                max_index_list = []
+                assigned_index_list = assigned_index.split(',')
+                for assigned_index_i in assigned_index_list:
+                  max_index_i = int(self.indices_dict[assigned_index_i]['max_index'])+1
+                  max_index_list.append(str(max_index_i))
+                max_index = ','.join(max_index_list)
+              else:
+                max_index = int(self.indices_dict[assigned_index]['max_index'])+1 
+              body_text += '\n{}{}=jnp.zeros(({}))'.format(self.tab1, short_name, max_index)
+              definition.append(short_name)                
         body_text += self.get_full_distribution_text(var_name, self.tab1)
-      # construct outputs
-      if len(self.outputs) > 0:
-        for var_name in self.topological_order:        
-          if (var_name.find('[') >= 0):
-            short_name, index_name = self.extract_array_short_name_and_index(var_name)
-            check_short_name = short_name + '_' + '_'.join(str(index_name).split(','))
-            if (short_name in self.outputs) and (body_text.find(check_short_name) >= 0):
-              obs_array_dict[short_name].append(check_short_name)
-        for output_obs in self.outputs:
-          outputs_list = [str(x).replace("'",'') for x in str(obs_array_dict[output_obs]).split(',')]
-          body_text += '\n{}'.format(self.tab1)+output_obs+'='+','.join(outputs_list)
     return body_text
 
   def makeProgram(self, statements):
@@ -859,45 +866,52 @@ class compile:
       dist_name  = self.distributions_dict[dist_key]['distribution']
       before_list = self.distributions_dict[dist_key]['before'].copy()
       after_list  = self.distributions_dict[dist_key]['after'].copy()
-      short_name = dist_key[:dist_key.find('[')]
-      index_name = dist_key[dist_key.find('[')+1:dist_key.find(']')]
+      short_name = dist_key
+      pos = short_name.find('[')
+      if pos > 0: short_name = dist_key[:pos]
       new_var_name  = dist_key
       new_mcmc_name = new_var_name      
       if (str_version == 'default'):
-        # udapte variable names from 'y[n,t]' to 'y_n_t' 
-        new_var_name  = dist_key.replace('[','_').replace(']','').replace(',','_')
-        for i,item in enumerate(param_list):
-          indices_list = self.extract_indices(item, b_brackets=True)
-          sub_item_list, _ = self.get_term_array(item)          
-          for sub_item in sub_item_list:
-            pos = sub_item.find('[')
-            if pos >= 0:
-              check_name = sub_item[:pos]
-              old_index  = sub_item[pos:]
-              b_is_input = False
-              if check_name in self.inputs:
-                b_is_input = True
-              if not b_is_input:               
-                # update parameter from y[1-1] to y_0, if it is not an input variable
-                if sub_item.find('pow(') >= 0:
-                  # TODO check for multi-index
-                  new_sub_item = sub_item.replace('[','_').replace(']','')
-                else:
-                  new_sub_item = sub_item.replace('[','_').replace(']','').replace(',','_')                
-                new_index = new_sub_item[pos:]
-                pos = new_index.find('_')
-                if (new_index.find('-') >= 0) and (pos == 0):             
-                  new_index_list = new_index[1:].split('_')
-                  for dim_i, index_value in enumerate(new_index_list):
-                    if (index_value.find('-') >= 0):
-                      index_value = str(eval(index_value))
-                      new_index_list[dim_i] = index_value
-                  new_index = ''
-                  for new_value in new_index_list:
-                    new_index += '_' + new_value                           
-                item = item.replace(check_name+old_index, check_name+new_index)
-          param_list[i] = item        
-        param_str = ','.join(param_list).replace(' ','') 
+        new_var_name = dist_key
+        if self.n_level > 0:
+          # udapte variable names from 'y[n,t]' to 'y_n_t'
+          new_var_name  = dist_key.replace('[','_').replace(']','').replace(',','_')          
+          for i,item in enumerate(param_list):
+            indices_list = self.extract_indices(item, b_brackets=True)
+            sub_item_list, _ = self.get_term_array(item)          
+            for sub_item in sub_item_list:
+              pos = sub_item.find('[')
+              if pos >= 0:
+                check_name = sub_item[:pos]
+                old_index  = sub_item[pos:]
+                b_is_input = False
+                if check_name in self.inputs:
+                  b_is_input = True
+                if old_index.find('[') >= 0:
+                  check_old_index = old_index.replace('[','').replace(']','')
+                  if check_old_index in self.inputs:
+                    b_is_input = True                    
+                if not b_is_input:               
+                  # update parameter from y[1-1] to y_0, if it is not an input variable
+                  if sub_item.find('pow(') >= 0:
+                    # TODO check for multi-index
+                    new_sub_item = sub_item.replace('[','_').replace(']','')
+                  else:
+                    new_sub_item = sub_item.replace('[','_').replace(']','').replace(',','_')                    
+                  new_index = new_sub_item[pos:]
+                  pos = new_index.find('_')
+                  if (new_index.find('-') >= 0) and (pos == 0):             
+                    new_index_list = new_index[1:].split('_')
+                    for dim_i, index_value in enumerate(new_index_list):
+                      if (index_value.find('-') >= 0):
+                        index_value = str(eval(index_value))
+                        new_index_list[dim_i] = index_value
+                    new_index = ''
+                    for new_value in new_index_list:
+                      new_index += '_' + new_value                           
+                  item = item.replace(check_name+old_index, check_name+new_index)
+            param_list[i] = item       
+          param_str = ','.join(param_list).replace(' ','')          
       elif (str_version == 'scan'):
         # update variable names from 'y[n,t]' to 'y_n_t' 
         new_var_name = dist_key.replace('[','_').replace(']','').replace(',','_')
@@ -939,14 +953,24 @@ class compile:
         param_list_with_before_after.append(before_param + param_name + after_param)        
       param_str = ','.join(param_list_with_before_after).replace(' ','')
       if dist_name == 'Assignment':
-        text = '{}={}'.format(new_var_name, param_str)
+        if (self.n_level == 0) and (new_var_name.find('[') >= 0):
+          index_name = new_var_name.replace(short_name,'').replace('[','').replace(']','')
+          text = '{}={}.at[{}].set({})'.format(short_name, short_name, index_name, param_str)
+        else:
+          text = '{}={}'.format(new_var_name, param_str)
       else:
         str_enumerate = ''
         if (dist_name.find('Ber') >= 0) or (dist_name.find('Binom') >= 0) or (
             dist_name.find('Poisson') >= 0 or dist_name.find('Cat') >= 0):
           str_enumerate = ',infer={"enumerate":"parallel"}'
-        text = '{}=numpyro.sample("{}",dist.{}({}){}{})'.format(new_var_name, new_mcmc_name, 
-                dist_name, param_str, str_enumerate, str_obs)
+
+        if (self.n_level == 0) and (new_var_name.find('[') >= 0):
+          index_name = new_var_name.replace(short_name,'').replace('[','').replace(']','')
+          text = '{}={}.at[{}].set(numpyro.sample("{}",dist.{}({}){}{}))'.format(short_name, short_name, index_name, new_mcmc_name, 
+                  dist_name, param_str, str_enumerate, str_obs)
+        else:
+          text = '{}=numpyro.sample("{}",dist.{}({}){}{})'.format(new_var_name, new_mcmc_name, 
+                  dist_name, param_str, str_enumerate, str_obs)
     return text
 
   def extract_array_short_name_and_index(self, input_name):
