@@ -540,10 +540,13 @@ class compile:
               start_index_list.append(str(item))
               max_length_list.append(str(int(item)+1))
             else:
-              # if index is not numeric (i.e.: n), then max length = max_index+1
-              start_index_list.append(str(int(index_so_far_list[index_dim])+1))  
-              max_length_list.append(str(self.indices_dict[assigned_index_list[index_dim]]['max_index']+1))
-
+              # if index is not numeric (i.e.: n), then max length = max_index+1, and start index = min index
+              assigned_index_i = assigned_index_list[index_dim]
+              min_index_i      = self.indices_dict[assigned_index_i]['min_index']
+              max_length_i     = self.indices_dict[assigned_index_i]['max_index']+1
+              start_index_list.append(str(min_index_i))
+              max_length_list.append(str(max_length_i))
+              
           # get combination_index_tuples to expand nodes         
           if node in self.distributions_dict:         
             array_index_values = []
@@ -599,8 +602,8 @@ class compile:
                       for replace_index, replaced_list_item in enumerate(replaced_list):
                         replaced_list[replace_index] = str(eval(replaced_list_item))
                       new_eval = ','.join(replaced_list)
-                      new_param_name = new_param_name.replace(old_index, new_eval)
-                      new_param_str  = new_param_str.replace(old_index,  new_eval)                             
+                      new_param_name = new_param_name.replace('['+str(old_index)+']', '['+new_eval+']')
+                      new_param_str  = new_param_str.replace( '['+str(old_index)+']', '['+new_eval+']')                            
                     if len(new_param_name) > 0:
                         if not new_param_name.isnumeric():
                           self.insert_edge(source=new_param_name, target=new_var_name)                        
@@ -613,18 +616,40 @@ class compile:
                   new_index_name_list = new_index_name.split(',')
                   for param_dim, param_check in enumerate(new_dist_params):                
                     # replace any remaining non-numeric index with its value (i.e.: 3.0*n with 3.0*0, for y[0])
-                    for index_dim in range(len(assigned_index_list)):                               
-                      new_index = new_index_name_list[index_dim]                      
-                      param_check = param_check.replace(assigned_index_list[index_dim], new_index)
-                      new_dist_params[param_dim] = param_check
+                     for index_dim in range(len(assigned_index_list)):
+                      if param_check in list(self.indices_dict.keys()):                      
+                        new_index = new_index_name_list[index_dim]                      
+                        param_check = param_check.replace(assigned_index_list[index_dim], new_index)
+                        new_dist_params[param_dim] = param_check
+                      else:
+                        # mask variables before checking and replacing indices
+                        replace_dict = {}; masked_param_check = param_check
+                        for i,old_name in enumerate(self.nodes):
+                          new_name = 'NODE'+str(i)
+                          replace_dict[new_name] = old_name
+                          masked_param_check = masked_param_check.replace(old_name, new_name)
+                        b_found_index = False
+                        for check_index in list(self.indices_dict.keys()):
+                          if masked_param_check.find(check_index) >= 0:
+                            b_found_index = True
+                            break
+                        if b_found_index:                        
+                          new_index = new_index_name_list[index_dim]
+                          masked_param_check = masked_param_check.replace(assigned_index_list[index_dim], new_index)
+                          unmasked_param_check = masked_param_check
+                          for k,v in replace_dict.items():
+                            new_name = 'NODE'+str(i)
+                            unmasked_param_check = unmasked_param_check.replace(k,v)                            
+                          new_dist_params[param_dim] = unmasked_param_check
                 distribution_name = self.distributions_dict[node]['distribution']
                 before = self.distributions_dict[node]['before']
                 after  = self.distributions_dict[node]['after']
                 self.distributions_dict[new_var_name] = {'distribution': distribution_name, 
                                                          'parameters': new_dist_params,
-                                                         'before':before, 'after':after}          
+                                                         'before':before, 'after':after}
+                
     if self.b_user_warning:
-      # sanity check for Indices max mispecification
+      # sanity check for Indices max and min mispecifications
       for check_name in list(self.distributions_dict.keys()):
         if check_name.find('[') >= 0:
           short_name, current_index_name = self.extract_array_short_name_and_index(check_name)
@@ -634,13 +659,22 @@ class compile:
             check_index_list = current_index_name.split(',')
             for index_dim, index_i in enumerate(check_index_list):
               assigned_index_i = assigned_index_list[index_dim]
+              min_index_i_from_indices = self.indices_dict[assigned_index_i]['min_index']
+              min_index_i_from_df = corresponding_df.index.get_level_values(index_dim)[0]
               max_index_i_from_indices = self.indices_dict[assigned_index_i]['max_index']
-              max_index_i_from_df = len(corresponding_df.index.get_level_values(index_dim))-1           
-              if max_index_i_from_indices > max_index_i_from_df:
-                detail = '\nplease fix Indices {} max to match {} {} max.\n'.format(assigned_index_i, corresponding_df.name, assigned_index_i)
-                print('\nfound index max mismatch: cannot find variable {}, because Indices {} max = {} > {} index {} max = {}.{}'.format(
-                      check_name, assigned_index_i, max_index_i_from_indices, corresponding_df.name, assigned_index_i, max_index_i_from_df, detail))
-                assert(1==2), 'Indices and df index max mismatch'
+              max_index_i_from_df = corresponding_df.index.get_level_values(index_dim)[-1]
+              if str(max_index_i_from_df).isnumeric():
+                if max_index_i_from_indices > max_index_i_from_df:
+                  detail = '\nplease fix Indices {} max to match {} {} max.\n'.format(assigned_index_i, corresponding_df.name, assigned_index_i)
+                  print('\nfound index max mismatch: cannot find variable {}, because Indices {} max = {} > {} index {} max = {}.{}'.format(
+                        check_name, assigned_index_i, max_index_i_from_indices, corresponding_df.name, assigned_index_i, max_index_i_from_df, detail))
+                  assert(1==2), 'Indices and df index max mismatch'
+              if str(min_index_i_from_df).isnumeric():
+                if min_index_i_from_indices < min_index_i_from_df:
+                  detail = '\nplease fix Indices {} min to match {} {} min.\n'.format(assigned_index_i, corresponding_df.name, assigned_index_i)
+                  print('\nfound index min mismatch: cannot find variable {}, because Indices {} min = {} < {} index {} min = {}.{}'.format(
+                        check_name, assigned_index_i, min_index_i_from_indices, corresponding_df.name, assigned_index_i, min_index_i_from_df, detail))
+                  assert(1==2), 'Indices and df index min mismatch'
 
     # remove nodes, edges, distributions that have non-numeric index (i.e.: y[t-1])
     for node in init_nodes:
@@ -849,7 +883,7 @@ class compile:
           self.distributions_dict[variable_name] = {'distribution':statement_type.replace('Sample',''),
                                                     'parameters':parameter_expressions,
                                                     'before':before, 'after':after}          
-    self.construct_array_variables_dict()  
+    self.construct_array_variables_dict()
     self.expand_and_insert_edge_for_temporal_nodes()
     self.topological_order, _ = self.draw_graph(self.nodes, self.edges, self.b_graph)
 
