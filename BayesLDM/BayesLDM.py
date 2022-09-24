@@ -201,7 +201,7 @@ class Parser:
       elif type_name == "BernoulliLogitsSample":    parameters = [statement.logits]; before=['logits=']
       elif type_name == "BetaSample":               parameters = [statement.a, statement.b]
       elif type_name == "BinomialSample":           parameters = [statement.total_count, statement.probs]
-      elif type_name == "BinomialLogitsSample":     parameters = [statement.logits, statement.total_count]; before=['','int(']; after=['',')']
+      elif type_name == "BinomialLogitsSample":     parameters = [statement.logits, statement.total_count]
       elif type_name == "CategoricalSample":        parameters = [statement.probs]; before=['jnp.array(']; after=[')']
       elif type_name == "CauchySample":             parameters = [statement.mean, statement.sd]
       elif type_name == "DirichletSample":          parameters = [statement.concentration]; before=['jnp.array(']; after=[')']
@@ -441,7 +441,7 @@ class compile:
       term_array[j] = item    
     return term_array, clean_str_terms
 
-  def draw_graph(self, nodes, edges, b_graph):
+  def draw_graph(self, nodes, edges, b_graph):    
     str_nodes = ''
     for node_id in nodes:
       str_nodes += '\n\t<node id="{}"/>'.format(node_id)
@@ -555,7 +555,7 @@ class compile:
               start = int(start_index_list[index_dim]); end = int(max_length_list[index_dim])
               index_values = list(np.arange(start, end))
               array_index_values.append(index_values)   
-            combination_index_tuples = list(itertools.product(*array_index_values))          
+            combination_index_tuples = list(itertools.product(*array_index_values))
 
             # expand nodes using combination_index_tuples, and insert nodes, edges, distributions_dict
             for index_tuple in combination_index_tuples:
@@ -614,16 +614,16 @@ class compile:
                 if new_var_name.find('[') >= 0:
                   new_short_name, new_index_name = self.extract_array_short_name_and_index(new_var_name)
                   new_index_name_list = new_index_name.split(',')
-                  for param_dim, param_check in enumerate(new_dist_params):                
+                  for param_dim, param_check in enumerate(new_dist_params):
                     # replace any remaining non-numeric index with its value (i.e.: 3.0*n with 3.0*0, for y[0])
-                     for index_dim in range(len(assigned_index_list)):
+                    for index_dim in range(len(assigned_index_list)):                      
                       if param_check in list(self.indices_dict.keys()):                      
                         new_index = new_index_name_list[index_dim]                      
                         param_check = param_check.replace(assigned_index_list[index_dim], new_index)
                         new_dist_params[param_dim] = param_check
                       else:
                         # mask variables before checking and replacing indices
-                        replace_dict = {}; masked_param_check = param_check
+                        replace_dict = {}; masked_param_check = param_check                             
                         for i,old_name in enumerate(self.nodes):
                           new_name = 'NODE'+str(i)
                           replace_dict[new_name] = old_name
@@ -641,13 +641,19 @@ class compile:
                             new_name = 'NODE'+str(i)
                             unmasked_param_check = unmasked_param_check.replace(k,v)                            
                           new_dist_params[param_dim] = unmasked_param_check
+                    # replace any remaining input[i] with its value (i.e input[i] with input[0], for y[0])
+                    for index_dim in range(len(assigned_index_list)):                    
+                      old_index_ = '['+assigned_index_list[index_dim]+']'
+                      current_param = new_dist_params[param_dim]
+                      if current_param.find(old_index_) >= 0:
+                        new_index_ = '['+new_index_name_list[index_dim]+']'
+                        new_dist_params[param_dim] = current_param.replace(old_index_, new_index_)                         
                 distribution_name = self.distributions_dict[node]['distribution']
                 before = self.distributions_dict[node]['before']
                 after  = self.distributions_dict[node]['after']
                 self.distributions_dict[new_var_name] = {'distribution': distribution_name, 
                                                          'parameters': new_dist_params,
-                                                         'before':before, 'after':after}
-                
+                                                         'before':before, 'after':after}                
     if self.b_user_warning:
       # sanity check for Indices max and min mispecifications
       for check_name in list(self.distributions_dict.keys()):
@@ -675,7 +681,7 @@ class compile:
                   print('\nfound index min mismatch: cannot find variable {}, because Indices {} min = {} < {} index {} min = {}.{}'.format(
                         check_name, assigned_index_i, min_index_i_from_indices, corresponding_df.name, assigned_index_i, min_index_i_from_df, detail))
                   assert(1==2), 'Indices and df index min mismatch'
-
+            
     # remove nodes, edges, distributions that have non-numeric index (i.e.: y[t-1])
     for node in init_nodes:
       if node.find('[') >= 0:
@@ -695,6 +701,11 @@ class compile:
             if not item.isnumeric():
               if edge in self.edges:
                 self.edges.remove(edge)
+      # remove edge where source is not in nodes
+      for edge in self.edges:
+        source_name = edge['source']
+        if source_name not in self.nodes:
+          self.edges.remove(edge)    
 
   def construct_array_variables_dict(self):
     for node in self.nodes:
@@ -808,38 +819,20 @@ class compile:
       else:
         self.n_level = 2
 
-    if self.n_level == 2:
-      if len(scan_candidates) > 0:
-        body_text = self.construct_scan_code(self.topological_order, scan_candidates, plate_candidates)
-      else:
-        self.chosen_implementation = 'plate'
-        body_text = ''; plate_init_so_far = []; plate_dist_so_far = []     
-        for var_name in self.topological_order:
-          body_text, plate_init_so_far, plate_dist_so_far = self.get_plate_text(
-              var_name, plate_candidates, body_text, plate_init_so_far, plate_dist_so_far)
+    if self.n_level == 2:     
+      self.chosen_implementation = 'plate'
+      body_text = ''; plate_init_so_far = []; plate_dist_so_far = []     
+      for var_name in self.topological_order:
+        body_text, plate_init_so_far, plate_dist_so_far = self.get_plate_text(
+            var_name, plate_candidates, body_text, plate_init_so_far, plate_dist_so_far)
           
     if self.n_level == 0:
       self.chosen_implementation = 'default'
       body_text = ''; obs_array_dict = collections.defaultdict(list)
       definition = []
       for var_name in self.topological_order:
-        pos = var_name.find('[')
-        if pos > 0:
-          short_name = var_name[:pos]
-          if short_name not in self.inputs:         
-            if short_name not in definition:
-              assigned_index = self.array_variables_dict[short_name]['assigned_index']
-              if assigned_index.find(',') > 0:
-                max_index_list = []
-                assigned_index_list = assigned_index.split(',')
-                for assigned_index_i in assigned_index_list:
-                  max_index_i = int(self.indices_dict[assigned_index_i]['max_index'])+1
-                  max_index_list.append(str(max_index_i))
-                max_index = ','.join(max_index_list)
-              else:
-                max_index = int(self.indices_dict[assigned_index]['max_index'])+1 
-              body_text += '\n{}{}=jnp.zeros(({}))'.format(self.tab1, short_name, max_index)
-              definition.append(short_name)                
+        definition_text, definition = self.insert_definition(var_name, definition)
+        body_text += definition_text
         body_text += self.get_full_distribution_text(var_name, self.tab1)
     return body_text
 
@@ -907,7 +900,7 @@ class compile:
       new_mcmc_name = new_var_name      
       if (str_version == 'default'):
         new_var_name = dist_key
-        if self.n_level > 0:
+        if self.n_level == 1: # for scan
           # udapte variable names from 'y[n,t]' to 'y_n_t'
           new_var_name  = dist_key.replace('[','_').replace(']','').replace(',','_')          
           for i,item in enumerate(param_list):
@@ -986,8 +979,10 @@ class compile:
           after_param = after_list[param_index]            
         param_list_with_before_after.append(before_param + param_name + after_param)        
       param_str = ','.join(param_list_with_before_after).replace(' ','')
+      condition_level0 = (self.n_level == 0) and (new_var_name.find('[') >= 0)
+      condition_level2 = (self.n_level == 2) and (new_var_name.find('[') >= 0)      
       if dist_name == 'Assignment':
-        if (self.n_level == 0) and (new_var_name.find('[') >= 0):
+        if condition_level0 or condition_level2:
           index_name = new_var_name.replace(short_name,'').replace('[','').replace(']','')
           text = '{}={}.at[{}].set({})'.format(short_name, short_name, index_name, param_str)
         else:
@@ -997,8 +992,8 @@ class compile:
         if (dist_name.find('Ber') >= 0) or (dist_name.find('Binom') >= 0) or (
             dist_name.find('Poisson') >= 0 or dist_name.find('Cat') >= 0):
           str_enumerate = ',infer={"enumerate":"parallel"}'
-
-        if (self.n_level == 0) and (new_var_name.find('[') >= 0):
+          
+        if condition_level0 or condition_level2:
           index_name = new_var_name.replace(short_name,'').replace('[','').replace(']','')
           text = '{}={}.at[{}].set(numpyro.sample("{}",dist.{}({}){}{}))'.format(short_name, short_name, index_name, new_mcmc_name, 
                   dist_name, param_str, str_enumerate, str_obs)
@@ -1025,16 +1020,29 @@ class compile:
     # this inserts imputation: it calls get_get_distribution_text_with_impute and distribution_text
     if str_tab is None:
       str_tab = self.tab1
-    short_name = dist_key[:dist_key.find('[')]
+    short_name = dist_key
+    pos_short_name = dist_key.find('[')
+    if pos_short_name >= 0:
+      short_name = dist_key[:pos_short_name]    
     corresponding_df = None
     if short_name in self.array_variables_dict:
       corresponding_df = self.array_variables_dict[short_name]['corresponding_df']
     b_use_impute = (corresponding_df is not None) and (short_name in self.obs)
+    
     if b_use_impute:
       value_name = '{}["{}"]'.format(corresponding_df.name, short_name)  
       full_distribution_text = '\n{}{}'.format(str_tab, self.get_distribution_text_with_impute(dist_key, str_implementation, value_name))
     else:
-      full_distribution_text = '\n{}{}'.format(str_tab, self.get_distribution_text(dist_key, str_implementation, ''))
+      str_obs = ''
+      if (pos_short_name < 0) and (corresponding_df is None) and (short_name in self.obs):
+        # in case of simple models, with no missing data (i.e. y ~ distribution)
+        df_data = self.find_df(short_name, b_display=False)
+        if df_data is not None:
+          if short_name in list(df_data.columns):
+            if df_data[short_name].isnull().sum() <= 0:
+              value_name = '{}["{}"].values'.format(df_data.name, short_name)
+              str_obs = ',obs={}'.format(value_name, value_name)            
+      full_distribution_text = '\n{}{}'.format(str_tab, self.get_distribution_text(dist_key, str_implementation, str_obs=str_obs))
     return full_distribution_text
 
   def get_transition_candidates(self, b_check_if_DBN=False):
@@ -1086,10 +1094,10 @@ class compile:
             b_plate = True
             for param_i in parameters_list:
               for check_index in list(self.indices_dict.keys()):
-                if str(param_i).find(check_index) >= 0:
+                if str(param_i).find(check_index) >= 0 and (param_i.find('[') >= 0):                  
                   b_plate = False
                   break
-              for check_node in distributions_only:
+              for check_node in distributions_only:       
                 if (str(param_i).find(check_node) >= 0) and (check_node.find('[') >= 0):
                   b_plate = False
                   break
@@ -1101,10 +1109,38 @@ class compile:
             plate_candidates.append(k)
     return plate_candidates
 
+  def insert_definition(self, var_name, definition):
+    definition_text = ''
+    pos = var_name.find('[')
+    if pos > 0:
+      short_name = var_name[:pos]
+      if (short_name not in self.inputs) and (short_name not in definition):
+        assigned_index = self.array_variables_dict[short_name]['assigned_index']
+        if assigned_index.find(',') > 0:
+          max_index_list = []
+          assigned_index_list = assigned_index.split(',')
+          for assigned_index_i in assigned_index_list:
+            max_index_i = int(self.indices_dict[assigned_index_i]['max_index'])+1
+            max_index_list.append(str(max_index_i))
+          max_index = ','.join(max_index_list)
+        else:
+          max_index = int(self.indices_dict[assigned_index]['max_index'])+1 
+        definition_text = '\n{}{}=jnp.zeros(({}))'.format(self.tab1, short_name, max_index)
+        definition.append(short_name)
+    return definition_text, definition
+          
   def get_plate_text(self, var_name, plate_candidates, body_text, plate_init_so_far, plate_dist_so_far):
     if var_name.find('[') >= 0:
-      short_name, index_name = self.extract_array_short_name_and_index(var_name)
-      if (str(index_name).find(',') < 0) and (var_name in plate_candidates) and (short_name not in self.obs):
+      short_name, index_name = self.extract_array_short_name_and_index(var_name)      
+      short_plate_candidates = []
+      for plate_name in plate_candidates:
+        short_plate = plate_name
+        pos = plate_name.find('[')
+        if pos > 0:
+          short_plate = plate_name[:pos]
+        short_plate_candidates.append(short_plate)
+        
+      if (str(index_name).find(',') < 0) and (short_name in short_plate_candidates) and (short_name not in self.obs):
         assigned_index = self.array_variables_dict[short_name]['assigned_index'] 
         max_index = self.indices_dict[assigned_index]['max_index']
         plate_text_init = '\n{}with numpyro.plate("{}_plate",{}):'.format(self.tab1, assigned_index, max_index+1)
@@ -1116,6 +1152,9 @@ class compile:
           plate_dist_so_far.append(plate_text_dist)
           body_text += plate_text_dist 
       else:
+        definition_text, definition = self.insert_definition(var_name, definition=[])
+        if body_text.find(definition_text) < 0:
+          body_text += definition_text      
         body_text += self.get_full_distribution_text(var_name, self.tab1)          
     else:
       body_text += self.get_full_distribution_text(var_name, self.tab1)
