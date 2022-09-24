@@ -614,33 +614,37 @@ class compile:
                 if new_var_name.find('[') >= 0:
                   new_short_name, new_index_name = self.extract_array_short_name_and_index(new_var_name)
                   new_index_name_list = new_index_name.split(',')
-                  for param_dim, param_check in enumerate(new_dist_params):
+                  for param_dim, param_check in enumerate(new_dist_params):                    
                     # replace any remaining non-numeric index with its value (i.e.: 3.0*n with 3.0*0, for y[0])
-                    for index_dim in range(len(assigned_index_list)):                      
-                      if param_check in list(self.indices_dict.keys()):                      
+                    for index_dim in range(len(assigned_index_list)):
+                      param_check_name = re.sub(r'[0-9]+', '', param_check)
+                      operators = ['+', '-', '*', '/', '**', '.']
+                      for operator in operators:
+                        param_check_name = param_check_name.replace(operator, '')                      
+                      if param_check_name in list(self.indices_dict.keys()):                      
                         new_index = new_index_name_list[index_dim]                      
                         param_check = param_check.replace(assigned_index_list[index_dim], new_index)
                         new_dist_params[param_dim] = param_check
-                      else:
+                      else:                       
                         # mask variables before checking and replacing indices
-                        replace_dict = {}; masked_param_check = param_check                             
+                        replace_dict = {}; masked_param_check = param_check                        
                         for i,old_name in enumerate(self.nodes):
                           new_name = 'NODE'+str(i)
                           replace_dict[new_name] = old_name
-                          masked_param_check = masked_param_check.replace(old_name, new_name)
-                        b_found_index = False
+                          masked_param_check = masked_param_check.replace(old_name, new_name)                        
+                        index_to_check = ''
                         for check_index in list(self.indices_dict.keys()):
                           if masked_param_check.find(check_index) >= 0:
-                            b_found_index = True
-                            break
-                        if b_found_index:                        
+                            index_to_check = check_index
+                            break                        
+                        if index_to_check == assigned_index_list[index_dim]:                        
                           new_index = new_index_name_list[index_dim]
                           masked_param_check = masked_param_check.replace(assigned_index_list[index_dim], new_index)
                           unmasked_param_check = masked_param_check
                           for k,v in replace_dict.items():
                             new_name = 'NODE'+str(i)
                             unmasked_param_check = unmasked_param_check.replace(k,v)                            
-                          new_dist_params[param_dim] = unmasked_param_check
+                          new_dist_params[param_dim] = unmasked_param_check                        
                     # replace any remaining input[i] with its value (i.e input[i] with input[0], for y[0])
                     for index_dim in range(len(assigned_index_list)):                    
                       old_index_ = '['+assigned_index_list[index_dim]+']'
