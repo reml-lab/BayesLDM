@@ -1,8 +1,0 @@
-.vscode
-venv
-
-*.pyc
-*.graphml
-
-.DS_Store
-test.py
