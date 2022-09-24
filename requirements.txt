@@ -1,3 +1,6 @@
 textx
 numpyro
 funsor
+pandas
+matplotlib
+networkx
