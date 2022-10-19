@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as df
+from numpyro import handlers
+from jax import random, vmap
 import collections
 
 def get_imputed_df(model, old_df, sample_indices=[], method=None, rescale_df_info=None):
@@ -133,3 +135,22 @@ def post_process_samples(model, posterior_samples):
       else:
         post_process_dict[k] = np.array(v)
     return post_process_dict
+
+def compute_predictions(BayesLDM_model, input_name, posterior_samples, data_dict, seed=0, b_display=True):  
+  def get_predictions(rng_key, input_name, input_model, posterior_samples, *args, **kwargs):
+    model_handler = handlers.seed(handlers.condition(input_model, posterior_samples), rng_key)
+    model_trace = handlers.trace(model_handler).get_trace(*args, **kwargs)
+    return_value = None
+    if input_name in model_trace:
+      return_value = model_trace[input_name]['value']
+    else:
+      if b_display:
+        print('warning: {} is not a model parameter'.format(input_name))
+    return return_value
+  model   = BayesLDM_model.model_code
+  rng_key = random.PRNGKey(seed)
+  num_samples = BayesLDM_model.num_samples   
+  predict_fn = vmap(lambda rng_key, params: get_predictions(rng_key, input_name, model, params, **data_dict))
+  predictions = predict_fn(random.split(rng_key, num_samples), posterior_samples)  
+  return predictions
+
