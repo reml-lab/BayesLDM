@@ -22,10 +22,11 @@ import re
 class Parser:
   def __init__(self, dsl_text):
     self.distribution_names = [ 'BernoulliSample', 'BernoulliLogitsSample', 'BetaSample', 'BinomialSample', 
-                                'BinomialLogitsSample', 'CauchySample', 'CategoricalSample', 'DirichletSample',
+                                'BinomialLogitsSample', 'CauchySample', 'CategoricalSample', 'Chi2Sample', 'DirichletSample',
                                 'ExponentialSample', 'GammaSample', 'GumbelSample', 'HalfCauchySample', 
-                                'HalfNormalSample', 'InverseGammaSample', 'LogNormalSample', 'NormalSample', 
-                                'MixtureSameFamilySample', 'MultivariateNormalSample', 'TruncatedNormalSample', 
+                                'HalfNormalSample', 'InverseGammaSample', 'LKJSample', 'LKJCholeskySample',
+                                'LogNormalSample', 'NormalSample', 'MixtureSameFamilySample',
+                                'MultivariateNormalSample', 'TruncatedNormalSample', 
                                 'PoissonSample', 'StudentTSample', 'ZeroInflatedPoissonSample']
     dist_statement = '|'.join(self.distribution_names)
 
@@ -72,6 +73,9 @@ class Parser:
     CauchySample:
       variable=Variable '~' 'Cauchy(' mean=Expression ',' sd=Expression ')'
     ;
+    Chi2Sample:
+      variable=Variable '~' 'Chi2(' degreef=Expression ')'
+    ;
     DirichletSample:
       variable=Variable '~' 'Dirichlet(' concentration=Ratios ')'
     ;
@@ -92,7 +96,13 @@ class Parser:
     ;
     InverseGammaSample:
       variable=Variable '~' 'InverseGamma(' concentration=Expression ',' rate=Expression ')'
-    ;    
+    ;
+    LKJSample:
+      variable=Variable '~' 'LKJ(' dimension=Expression ',' concentration=Expression ')'
+    ;
+    LKJCholeskySample:
+      variable=Variable '~' 'LKJCholesky(' dimension=Expression ',' concentration=Expression ')'
+    ; 
     LogNormalSample:
       variable=Variable '~' 'LogNormal(' mean=Expression ',' sd=Expression ')'
     ;    
@@ -204,13 +214,16 @@ class Parser:
       elif type_name == "BinomialLogitsSample":     parameters = [statement.logits, statement.total_count]
       elif type_name == "CategoricalSample":        parameters = [statement.probs]; before=['jnp.array(']; after=[')']
       elif type_name == "CauchySample":             parameters = [statement.mean, statement.sd]
+      elif type_name == "Chi2Sample":               parameters = [statement.degreef]; before=['df=']
       elif type_name == "DirichletSample":          parameters = [statement.concentration]; before=['jnp.array(']; after=[')']
       elif type_name == "ExponentialSample":        parameters = [statement.rate]
       elif type_name == "GammaSample":              parameters = [statement.concentration, statement.rate]
       elif type_name == "GumbelSample":             parameters = [statement.loc, statement.scale]
       elif type_name == "HalfCauchySample":         parameters = [statement.scale]
       elif type_name == "HalfNormalSample":         parameters = [statement.scale]
-      elif type_name == "InverseGammaSample":       parameters = [statement.concentration, statement.rate]          
+      elif type_name == "InverseGammaSample":       parameters = [statement.concentration, statement.rate]
+      elif type_name == "LKJSample":                parameters = [statement.dimension, statement.concentration]
+      elif type_name == "LKJCholeskySample":        parameters = [statement.dimension, statement.concentration] 
       elif type_name == "LogNormalSample":          parameters = [statement.mean, statement.sd]
       elif type_name == "MixtureSameFamilySample":  parameters = [statement.mixing, statement.component]          
       elif type_name == "MultivariateNormalSample": parameters = [statement.mean, statement.cov]
@@ -627,9 +640,11 @@ class compile:
                         new_dist_params[param_dim] = param_check
                       else:                       
                         # mask variables before checking and replacing indices
-                        replace_dict = {}; masked_param_check = param_check                        
+                        replace_dict = {}; masked_param_check = param_check
+                        ordered_new_names = []
                         for i,old_name in enumerate(self.nodes):
                           new_name = 'NODE'+str(i)
+                          ordered_new_names.append(new_name)
                           replace_dict[new_name] = old_name
                           masked_param_check = masked_param_check.replace(old_name, new_name)                        
                         index_to_check = ''
@@ -638,13 +653,20 @@ class compile:
                             index_to_check = check_index
                             break                        
                         if index_to_check == assigned_index_list[index_dim]:                        
-                          new_index = new_index_name_list[index_dim]
-                          masked_param_check = masked_param_check.replace(assigned_index_list[index_dim], new_index)
+                          new_index = str(new_index_name_list[index_dim])
+                          masked_param_check = masked_param_check.replace('['+assigned_index_list[index_dim], '['+new_index)
+                          for operator in operators:
+                            masked_param_check = masked_param_check.replace(assigned_index_list[index_dim]+operator, new_index+operator)
+                            masked_param_check = masked_param_check.replace(operator+assigned_index_list[index_dim], operator+new_index)
                           unmasked_param_check = masked_param_check
-                          for k,v in replace_dict.items():
+                          # replace the names with larger index first
+                          reverse_ordered_keys = ordered_new_names
+                          reverse_ordered_keys.reverse()                          
+                          for k in reverse_ordered_keys:
+                            v = replace_dict[k]
                             new_name = 'NODE'+str(i)
                             unmasked_param_check = unmasked_param_check.replace(k,v)                            
-                          new_dist_params[param_dim] = unmasked_param_check                        
+                          new_dist_params[param_dim] = unmasked_param_check                    
                     # replace any remaining input[i] with its value (i.e input[i] with input[0], for y[0])
                     for index_dim in range(len(assigned_index_list)):                    
                       old_index_ = '['+assigned_index_list[index_dim]+']'
@@ -1128,8 +1150,23 @@ class compile:
             max_index_list.append(str(max_index_i))
           max_index = ','.join(max_index_list)
         else:
-          max_index = int(self.indices_dict[assigned_index]['max_index'])+1 
-        definition_text = '\n{}{}=jnp.zeros(({}))'.format(self.tab1, short_name, max_index)
+          max_index = int(self.indices_dict[assigned_index]['max_index'])+1          
+        # temporary fix for multi-index multivariate
+        # set name of variable to M3[t] for shape (t,3), default M[t] has shape (t,2)
+        multivariate_detail = ''
+        if var_name in list(self.distributions_dict.keys()):
+          check_distribution = self.distributions_dict[var_name]['distribution']
+          if check_distribution.find('Multivariate') >= 0:
+            str_digits = ''
+            for i in range(len(short_name)):
+              char_i = str(short_name[i])
+              if char_i.isnumeric():
+                str_digits = str_digits + char_i
+            if len(str_digits) > 0:
+              multivariate_detail = ','+str_digits
+            else:            
+              multivariate_detail = ',2'
+        definition_text = '\n{}{}=jnp.zeros(({}{}))'.format(self.tab1, short_name, max_index, multivariate_detail)
         definition.append(short_name)
     return definition_text, definition
           
