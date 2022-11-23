@@ -1,6 +1,8 @@
 # BayesLDM
 
-This repository contains the official implementation for the BayesLDM paper.
+This repository contains the official implementation for the BayesLDM paper. 
+This work is supported by National Institutes of Health through grants U01CA229445 and 1P41EB028242.
+The paper was accepted at IEEE/ACM international conference on Connected Health: Applications, Systems and Engineering Technologies (CHASE) 2022. 
 
 ## Examples
 
@@ -14,19 +16,12 @@ For example:
 
 If you use BayesLDM, please cite the paper:
 
-@inproceedings{tung2022,
-
-  author = {Tung, Karine and De La Torre, Steven and El Mistiri, Mohamed and Braga De Braganca, Rebecca and Hekler, Eric and Pavel, Misha and Rivera, Daniel and Klasnja, Pedja and Spruijt-Metz, Donna and Marlin, Benjamin M.},
-  
-  title = {BayesLDM: A Domain-Specific Language for Probabilistic Modeling of Longitudinal Data},  
-  
-  publisher = {arXiv},  
-  
-  year = {2022}, 
-  
-  url = {https://arxiv.org/abs/2209.05581}
-
-}
+  @inproceedings{BayesLDM2022,
+    author = {Tung, Karine and De La Torre, Steven and El Mistiri, Mohamed and Braga De Braganca, Rebecca and Hekler, Eric and Pavel, Misha and Rivera, Daniel and Klasnja, Pedja and Spruijt-Metz, Donna and Marlin, Benjamin M.},
+    title = {BayesLDM: A Domain-Specific Language for Probabilistic Modeling of Longitudinal Data},
+    publisher = {arXiv},  
+    year = {2022},
+    doi = {10.48550/arxiv.2209.05581}
+  }
 
 This paper was accepted at IEEE/ACM international conference on Connected Health: Applications, Systems and Engineering Technologies (CHASE) 2022. The citation for CHASE 2022 is coming soon.
-
