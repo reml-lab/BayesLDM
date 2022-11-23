@@ -12,4 +12,14 @@ For example:
 
 ## Citing BayesLDM
 
-If you use BayesLDM, please cite the paper: citation (coming soon)
+If you use BayesLDM, please cite the paper:
+
+@inproceedings{tung2022,
+  author = {Tung, Karine and De La Torre, Steven and El Mistiri, Mohamed and Braga De Braganca, Rebecca and Hekler, Eric and Pavel, Misha and Rivera, Daniel and Klasnja, Pedja and Spruijt-Metz, Donna and Marlin, Benjamin M.},
+  title = {BayesLDM: A Domain-Specific Language for Probabilistic Modeling of Longitudinal Data},  
+  publisher = {arXiv},  
+  year = {2022}, 
+  url = {https://arxiv.org/abs/2209.05581}
+}
+
+This paper was accepted at IEEE/ACM international conference on Connected Health: Applications, Systems and Engineering Technologies (CHASE) 2022. The citation for CHASE 2022 is coming soon.
