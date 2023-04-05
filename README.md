@@ -12,7 +12,7 @@ For example:
 
 + [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/reml-lab/BayesLDM/blob/main/Examples/BayesLDM_quickstart.ipynb)  BayesLDM Quickstart
 
-+ [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/reml-lab/BayesLDM/blob/main/Examples/BayesLDM_manual.ipynb)  BayesLDM User Guide
++ [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/reml-lab/BayesLDM/blob/main/Examples/BayesLDM_userguide.ipynb)  BayesLDM User Guide
 
 ## Citing BayesLDM
 
@@ -27,6 +27,5 @@ This paper was accepted at IEEE/ACM international conference on Connected Health
   booktitle={2022 IEEE/ACM Conference on Connected Health: Applications, Systems and Engineering Technologies (CHASE)}, 
   title={BayesLDM: A Domain-specific Modeling Language for Probabilistic Modeling of Longitudinal Data}, 
   year={2022},
-  pages={78-90}
-}
+  pages={78-90}}
 
