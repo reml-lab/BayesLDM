@@ -12,16 +12,21 @@ For example:
 
 + [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/reml-lab/BayesLDM/blob/main/Examples/BayesLDM_quickstart.ipynb)  BayesLDM Quickstart
 
++ [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/reml-lab/BayesLDM/blob/main/Examples/BayesLDM_manual.ipynb)  BayesLDM User Guide
+
 ## Citing BayesLDM
 
-If you use BayesLDM, please cite the paper:
+If you use BayesLDM, please cite our paper. 
 
-  @inproceedings{BayesLDM2022,
-    author = {Tung, Karine and De La Torre, Steven and El Mistiri, Mohamed and Braga De Braganca, Rebecca and Hekler, Eric and Pavel, Misha and Rivera, Daniel and Klasnja, Pedja and Spruijt-Metz, Donna and Marlin, Benjamin M.},
-    title = {BayesLDM: A Domain-Specific Language for Probabilistic Modeling of Longitudinal Data},
-    publisher = {arXiv},  
-    year = {2022},
-    doi = {10.48550/arxiv.2209.05581}
-  }
+This paper was accepted at IEEE/ACM international conference on Connected Health: Applications, Systems and Engineering Technologies (CHASE) 2022. 
++ The link for the published paper is: [paper link](https://ieeexplore.ieee.org/document/9983643)
++ The link for the arXiv paper is: [arXiv link](https://arxiv.org/abs/2209.05581)
 
-This paper was accepted at IEEE/ACM international conference on Connected Health: Applications, Systems and Engineering Technologies (CHASE) 2022. The citation for CHASE 2022 is coming soon.
+@inproceedings{BayesLDM2022,
+  author={Tung, Karine and De La Torre, Steven and El Mistiri, Mohamed and De Braganca, Rebecca Braga and Hekler, Eric and Pavel, Misha and Rivera, Daniel and Klasnja, Pedja and Spruijt-Metz, Donna and Marlin, Benjamin M.},
+  booktitle={2022 IEEE/ACM Conference on Connected Health: Applications, Systems and Engineering Technologies (CHASE)}, 
+  title={BayesLDM: A Domain-specific Modeling Language for Probabilistic Modeling of Longitudinal Data}, 
+  year={2022},
+  pages={78-90}
+}
+
