@@ -1,5 +1,7 @@
 # BayesLDM
 
+BayesLDM: A Domain-specific Modeling Language for Probabilistic Modeling of Longitudinal Data.
+
 This repository contains the official implementation for the BayesLDM paper. 
 This work is supported by National Institutes of Health through grants U01CA229445 and 1P41EB028242.
 The paper was accepted at IEEE/ACM international conference on Connected Health: Applications, Systems and Engineering Technologies (CHASE) 2022. 
